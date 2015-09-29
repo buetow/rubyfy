@@ -18,6 +18,8 @@ class Rubyfy
       @args[opt] = arg
     end
 
+    @args["--parallel"] = 1 unless @args["--parallel"]
+
     log(:DEBUG, @args) if @args["--debug"]
   end
 
@@ -65,13 +67,6 @@ class Rubyfy
 
 private
 
-  def log(severity, message)
-    return if severity == :VERBOSE and not @args["--verbose"]
-    @log_mutex.synchronize do
-      puts "#{severity}::#{message}"
-    end
-  end
-
   def run_command(server, command="uptime", root=false, user=ENV["USER"])
     log(:VERBOSE,"#{server}::Connecting")
     sudo = root ? "sudo " : ""
@@ -102,6 +97,13 @@ private
     req.[]=("Accept", content_type)
     http = Net::HTTP.new(uri.host, uri.port)
     http.request(req).body
+  end
+
+  def log(severity, message)
+    return if severity == :VERBOSE and not @args["--verbose"]
+    @log_mutex.synchronize do
+      puts "#{severity}::#{message}"
+    end
   end
 end
 

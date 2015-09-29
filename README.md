@@ -7,7 +7,7 @@ Example usage:
 
 ```
 cat serverlist.txt | ./rubyfy -p 10 -c 'hostname'
-./rubyfy -p 1 -c 'hostname' <<< foo.example.com
+./rubyfy --root --command 'id' <<< foo.example.com
 ```
 
 
