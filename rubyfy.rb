@@ -54,22 +54,18 @@ end
 begin
   opts = GetoptLong.new(
     [ "--command", "-c", GetoptLong::REQUIRED_ARGUMENT ],
+    [ "--debug", "-d", GetoptLong::OPTIONAL_ARGUMENT ],
     [ "--parallel", "-p", GetoptLong::OPTIONAL_ARGUMENT ],
+    [ "--root", "-r", GetoptLong::OPTIONAL_ARGUMENT ],
     [ "--silent", "-s", GetoptLong::OPTIONAL_ARGUMENT ],
     [ "--verbose", "-v", GetoptLong::OPTIONAL_ARGUMENT ],
-    [ "--debug", "-d", GetoptLong::OPTIONAL_ARGUMENT ],
-    [ "--root", "-r", GetoptLong::OPTIONAL_ARGUMENT ],
   )
 
   opts.each do |opt, arg|
     $ARGS[opt] = arg
   end
 
-  if $ARGS["--debug"]
-    opts.each do |opt, arg|
-      puts "#{opt} #{arg}"
-    end
-  end
+  log(:DEBUG, $ARGS) if $ARGS["--debug"]
 
   servers, jobs = [], []
   STDIN.read.split("\n").each { |s| servers << s }
