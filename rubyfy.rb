@@ -11,18 +11,33 @@ require "thread"
 
 class Rubyfy
   def initialize(opts)
-    @args = Hash.new
+    @conf = Hash.new
     @log_mutex = Mutex.new
 
     opts.each do |opt, arg|
-      @args[opt] = arg
+      opt.sub!(/^-+/, '')
+      @conf[opt] = arg
     end
 
-    # Set defaults
-    @args["--parallel"] = 1 unless @args["--parallel"]
-    @args["--user"] = ENV["USER"] unless @args["--user"]
+    # Read first config found
+    ["#{ENV["HOME"]}/.rubyfy.json", "rubyfy.json"].each do |config_path|
+      if File.exists?(config_path)
+        log(:VERBOSE, "Reading #{config_path}")
+        config_json = JSON.parse(File.read(config_path))
+        log(:VERBOSE, config_json)
+        config_json.each do |opt, arg|
+          log(:VERBOSE, "Reading #{opt}=#{arg} from #{config_path}")
+          @conf[opt] = arg unless @conf[arg]
+        end
+        break
+      end
+    end
 
-    log(:DEBUG, @args) if @args["--debug"]
+    # Set defaults of values if not set
+    @conf["parallel"] = 1 unless @conf["parallel"]
+    @conf["user"] = ENV["USER"] unless @conf["user"]
+
+    log(:DEBUG, @conf) if @conf["debug"]
   end
 
   def run
@@ -33,16 +48,16 @@ class Rubyfy
     servers.each do |server|
       job = {
         :SERVER => server,
-        :COMMAND => @args["--command"],
-        :ROOT => @args["--root"],
-        :USER => @args["--user"],
+        :COMMAND => @conf["command"],
+        :ROOT => @conf["root"],
+        :USER => @conf["user"],
         :STATUS => :NONE,
       }
       jobs << job
       work_q.push(job)
     end
 
-    parallel = @args["--parallel"].to_i
+    parallel = @conf["parallel"].to_i
 
     threads = (1..parallel).map do
       Thread.new do
@@ -76,7 +91,7 @@ private
     Net::SSH.start(server, user) do |session|
       log(:VERBOSE, "#{server}::Executing #{sudo}#{command}")
       session.exec!("#{sudo}#{command}") do |channel, stream, data|
-        log(:OUT, "#{server}::#{data}") unless @args["--silent"]
+        log(:OUT, "#{server}::#{data}") unless @conf["silent"]
       end
     end
   end
@@ -104,7 +119,7 @@ private
   end
 
   def log(severity, message)
-    return if severity == :VERBOSE and not @args["--verbose"]
+    return if severity == :VERBOSE and not @conf["verbose"]
     @log_mutex.synchronize do
       puts "#{severity}::#{message}"
     end
