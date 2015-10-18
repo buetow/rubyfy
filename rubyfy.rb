@@ -22,24 +22,25 @@ class Rubyfy
     @conf["verbose"] = true if @conf["debug"]
 
     # Read first config found
-    ["#{ENV["HOME"]}/.rubyfy.json", "rubyfy.json"].each do |config_path|
-      if File.exists?(config_path)
-        log(:VERBOSE, "Reading #{config_path}")
-        config_json = JSON.parse(File.read(config_path))
-        log(:VERBOSE, config_json)
-        config_json.each do |opt, arg|
+    ["#{ENV["HOME"]}/.rubyfy.json", "rubyfy.json"].each do |conf_path|
+      if File.exists?(conf_path)
+        log(:VERBOSE, "Reading #{conf_path}")
+        conf_json = JSON.parse(File.read(conf_path))
+        log(:VERBOSE, conf_json)
+        conf_json.each do |opt, arg|
           @conf[opt] = arg unless @conf[arg]
         end
         break
       end
     end
 
+    # Needed a 2nd time (as we read the config file)
+    @conf["verbose"] = true if @conf["debug"]
+
     # Set defaults of values if not set
     @conf["parallel"] = 1 unless @conf["parallel"]
     @conf["user"] = ENV["USER"] unless @conf["user"]
     @conf["outdir"] = "./results" unless @conf["outdir"]
-    # Needed a 2nd time (as we read the config file)
-    @conf["verbose"] = true if @conf["debug"]
 
     log(:DEBUG, @conf)
   end
