@@ -104,8 +104,9 @@ private
     log(:VERBOSE,"#{server}::Connecting")
     sudo = root ? "sudo " : ""
     Net::SSH.start(server, user) do |session|
-      log(:VERBOSE, "#{server}::Executing #{sudo}#{command}")
-      session.exec!("#{sudo}sh -c \"#{command}\"") do |channel, stream, data|
+      exec_command = "#{sudo}sh -c \"#{command}\""
+      log(:VERBOSE, "#{server}::Executing #{exec_command}")
+      session.exec!(exec_command) do |channel, stream, data|
         log(:OUT, "#{server}::#{data}") unless @conf["silent"]
       end
     end
