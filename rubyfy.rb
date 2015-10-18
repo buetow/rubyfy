@@ -19,6 +19,8 @@ class Rubyfy
       @conf[opt] = arg
     end
 
+    @conf["verbose"] = true if @conf["debug"]
+
     # Read first config found
     ["#{ENV["HOME"]}/.rubyfy.json", "rubyfy.json"].each do |config_path|
       if File.exists?(config_path)
@@ -26,7 +28,6 @@ class Rubyfy
         config_json = JSON.parse(File.read(config_path))
         log(:VERBOSE, config_json)
         config_json.each do |opt, arg|
-          log(:VERBOSE, "Reading #{opt}=#{arg} from #{config_path}")
           @conf[opt] = arg unless @conf[arg]
         end
         break
@@ -36,8 +37,11 @@ class Rubyfy
     # Set defaults of values if not set
     @conf["parallel"] = 1 unless @conf["parallel"]
     @conf["user"] = ENV["USER"] unless @conf["user"]
+    @conf["outdir"] = "./results" unless @conf["outdir"]
+    # Needed a 2nd time (as we read the config file)
+    @conf["verbose"] = true if @conf["debug"]
 
-    log(:DEBUG, @conf) if @conf["debug"]
+    log(:DEBUG, @conf)
   end
 
   def run
@@ -120,6 +124,7 @@ private
 
   def log(severity, message)
     return if severity == :VERBOSE and not @conf["verbose"]
+    return if severity == :DEBUG and not @conf["debug"]
     @log_mutex.synchronize do
       puts "#{severity}::#{message}"
     end
@@ -130,10 +135,12 @@ begin
   opts = GetoptLong.new(
     [ "--command", "-c", GetoptLong::REQUIRED_ARGUMENT ],
     [ "--debug", "-d", GetoptLong::OPTIONAL_ARGUMENT ],
+    [ "--name", "-n", GetoptLong::OPTIONAL_ARGUMENT ],
+    [ "--outdir", "-o", GetoptLong::OPTIONAL_ARGUMENT ],
     [ "--parallel", "-p", GetoptLong::OPTIONAL_ARGUMENT ],
-    [ "--user", "-u", GetoptLong::OPTIONAL_ARGUMENT ],
     [ "--root", "-r", GetoptLong::OPTIONAL_ARGUMENT ],
     [ "--silent", "-s", GetoptLong::OPTIONAL_ARGUMENT ],
+    [ "--user", "-u", GetoptLong::OPTIONAL_ARGUMENT ],
     [ "--verbose", "-v", GetoptLong::OPTIONAL_ARGUMENT ],
   )
 
