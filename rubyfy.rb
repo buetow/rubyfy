@@ -104,7 +104,7 @@ private
     sudo = root ? "sudo " : ""
     Net::SSH.start(server, user) do |session|
       log(:VERBOSE, "#{server}::Executing #{sudo}#{command}")
-      session.exec!("#{sudo}#{command}") do |channel, stream, data|
+      session.exec!("#{sudo}sh -c \"#{command}\"") do |channel, stream, data|
         log(:OUT, "#{server}::#{data}") unless @conf["silent"]
       end
     end
@@ -157,6 +157,7 @@ begin
     [ "--name", "-n", GetoptLong::OPTIONAL_ARGUMENT ],
     [ "--outdir", "-o", GetoptLong::OPTIONAL_ARGUMENT ],
     [ "--parallel", "-p", GetoptLong::OPTIONAL_ARGUMENT ],
+    [ "--precondition", "-P", GetoptLong::OPTIONAL_ARGUMENT ],
     [ "--root", "-r", GetoptLong::OPTIONAL_ARGUMENT ],
     [ "--silent", "-s", GetoptLong::OPTIONAL_ARGUMENT ],
     [ "--timestamp", "-t", GetoptLong::OPTIONAL_ARGUMENT ],
