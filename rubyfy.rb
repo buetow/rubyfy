@@ -136,7 +136,8 @@ private
     return if severity == :VERBOSE and not @conf["verbose"]
     return if severity == :DEBUG and not @conf["debug"]
 
-    message = "#{severity}::#{message}"
+    timestamp = @conf["timestamp"] ? "#{Time.now}::" : ""
+    message = "#{timestamp}#{severity}::#{message}"
 
     @log_mutex.synchronize do
       puts message
@@ -158,6 +159,7 @@ begin
     [ "--parallel", "-p", GetoptLong::OPTIONAL_ARGUMENT ],
     [ "--root", "-r", GetoptLong::OPTIONAL_ARGUMENT ],
     [ "--silent", "-s", GetoptLong::OPTIONAL_ARGUMENT ],
+    [ "--timestamp", "-t", GetoptLong::OPTIONAL_ARGUMENT ],
     [ "--user", "-u", GetoptLong::OPTIONAL_ARGUMENT ],
     [ "--verbose", "-v", GetoptLong::OPTIONAL_ARGUMENT ],
   )
