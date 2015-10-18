@@ -59,11 +59,12 @@ class Rubyfy
     work_q = Queue.new
     servers.each do |server|
       job = {
-        :SERVER => server,
         :COMMAND => @conf["command"],
+        :PRECONDITION => @conf["precondition"],
         :ROOT => @conf["root"],
-        :USER => @conf["user"],
+        :SERVER => server,
         :STATUS => :NONE,
+        :USER => @conf["user"],
       }
       jobs << job
       work_q.push(job)
@@ -99,7 +100,7 @@ class Rubyfy
 
 private
 
-  def run_command(server, command="uptime", root=false, user=ENV["USER"])
+  def run_command(server, command="id", root=false, user=ENV["USER"])
     log(:VERBOSE,"#{server}::Connecting")
     sudo = root ? "sudo " : ""
     Net::SSH.start(server, user) do |session|
@@ -113,13 +114,19 @@ private
   def run_job(job)
     server = job[:SERVER]
     command = job[:COMMAND]
-    root = job[:ROOT]
-    user = job[:USER]
+    pcond = job[:PRECONDITION]
+
+    # Exit the job if pcond file exists on the server
+    if pcond
+      add = "test -f #{pcond} && echo Precondition #{pcond} exists && exit 1"
+      command = "#{add}; #{command}"
+    end
+
     log(:VERBOSE, "#{server}::Running job #{job}")
     if File.exists?("#{server}.ignore")
       log(:INFO, "#{server}::Ignoring this server")
     else
-      run_command server, command, root, user
+      run_command server, command, job[:ROOT], job[:USER]
     end
     job[:STATUS] = :OK
   end
