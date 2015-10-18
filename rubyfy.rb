@@ -2,6 +2,7 @@
 
 # (C) 2015 by Paul Buetow 
 
+require "fileutils"
 require "getoptlong"
 require "json"
 require "net/http"
@@ -13,6 +14,7 @@ class Rubyfy
   def initialize(opts)
     @conf = Hash.new
     @log_mutex = Mutex.new
+    @outfile = nil
 
     opts.each do |opt, arg|
       opt.sub!(/^-+/, '')
@@ -40,7 +42,12 @@ class Rubyfy
     # Set defaults of values if not set
     @conf["parallel"] = 1 unless @conf["parallel"]
     @conf["user"] = ENV["USER"] unless @conf["user"]
-    @conf["outdir"] = "./results" unless @conf["outdir"]
+
+    # Dealing where to write the output to
+    @conf["outdir"] = "./out" unless @conf["outdir"]
+    @conf["name"] = "#{ENV["USER"]}.#{Time.now.to_i}" unless @conf["name"]
+    @outfile = "#{@conf["outdir"]}/#{@conf["name"]}"
+    FileUtils.mkdir_p(@conf["outdir"]) unless File.directory?(@conf["outdir"])
 
     log(:DEBUG, @conf)
   end
@@ -86,6 +93,8 @@ class Rubyfy
         log(:WARN,"#{job[:SERVER]}::No job result")
       end
     end
+
+    log(:STDOUTONLY, "Wrote results to #{@outfile}")
   end
 
 private
@@ -126,8 +135,16 @@ private
   def log(severity, message)
     return if severity == :VERBOSE and not @conf["verbose"]
     return if severity == :DEBUG and not @conf["debug"]
+
+    message = "#{severity}::#{message}"
+
     @log_mutex.synchronize do
-      puts "#{severity}::#{message}"
+      puts message
+      if @outfile and severity != :STDOUTONLY
+        open(@outfile, "a") do |f|
+          f.puts message
+        end
+      end
     end
   end
 end
