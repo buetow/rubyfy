@@ -18,7 +18,9 @@ class Rubyfy
       @args[opt] = arg
     end
 
+    # Set defaults
     @args["--parallel"] = 1 unless @args["--parallel"]
+    @args["--user"] = ENV["USER"] unless @args["--user"]
 
     log(:DEBUG, @args) if @args["--debug"]
   end
@@ -33,6 +35,7 @@ class Rubyfy
         :SERVER => server,
         :COMMAND => @args["--command"],
         :ROOT => @args["--root"],
+        :USER => @args["--user"],
         :STATUS => :NONE,
       }
       jobs << job
@@ -82,11 +85,12 @@ private
     server = job[:SERVER]
     command = job[:COMMAND]
     root = job[:ROOT]
+    user = job[:USER]
     log(:VERBOSE, "#{server}::Running job #{job}")
     if File.exists?("#{server}.ignore")
       log(:INFO, "#{server}::Ignoring this server")
     else
-      run_command server, command, root
+      run_command server, command, root, user
     end
     job[:STATUS] = :OK
   end
@@ -112,11 +116,11 @@ begin
     [ "--command", "-c", GetoptLong::REQUIRED_ARGUMENT ],
     [ "--debug", "-d", GetoptLong::OPTIONAL_ARGUMENT ],
     [ "--parallel", "-p", GetoptLong::OPTIONAL_ARGUMENT ],
+    [ "--user", "-u", GetoptLong::OPTIONAL_ARGUMENT ],
     [ "--root", "-r", GetoptLong::OPTIONAL_ARGUMENT ],
     [ "--silent", "-s", GetoptLong::OPTIONAL_ARGUMENT ],
     [ "--verbose", "-v", GetoptLong::OPTIONAL_ARGUMENT ],
   )
 
-  rubyfy = Rubyfy.new(opts)
-  rubyfy.run
+  Rubyfy.new(opts).run
 end
