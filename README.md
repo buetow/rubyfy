@@ -1,7 +1,9 @@
 Rubyfy
 ======
 
-Tested on 
+It's just a fancy SSH loop to execute stuff on remote servers.
+
+Tested on
 
 * Fedora 22 / Ruby 2.2.3
 * Mac OS X / MacPorts Ruby 2.2.0
@@ -23,6 +25,7 @@ Example usage:
 echo {foo,bar}.example.com | ./rubyfy.rb -p 10 -c 'pgrep -lf httpd' -n grep.txt
 
 # Reboot server only if file /var/run/maintenance.lock does NOT exist!
+echo foo.example.com |
 ./rubyfy.rb --root --command reboot --precondition /var/run/maintenance.lock
 ```
 
