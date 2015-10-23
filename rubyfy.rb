@@ -54,7 +54,11 @@ class Rubyfy
 
   def run
     servers, jobs = [], []
-    STDIN.read.split("\n").each { |s| servers << s }
+    STDIN.read.split("\n").each do |line|
+      line.split(" ").each { |s| servers << s }
+    end
+
+    log(:VERBOSE, "Server list: #{servers}")
 
     work_q = Queue.new
     servers.each do |server|
