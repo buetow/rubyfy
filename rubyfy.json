@@ -1,4 +1,4 @@
 {
-  "user" : "admin",
-  "precondition" : "/root/.maint"
+  "user" : "paul",
+  "precondition" : "/var/run/maintenance.lock"
 }
