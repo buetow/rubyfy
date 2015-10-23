@@ -59,6 +59,7 @@ class Rubyfy
     work_q = Queue.new
     servers.each do |server|
       job = {
+        :BACKGROUND => @conf["background"],
         :COMMAND => @conf["command"],
         :PRECONDITION => @conf["precondition"],
         :ROOT => @conf["root"],
@@ -100,14 +101,25 @@ class Rubyfy
 
 private
 
-  def run_command(server, command="id", root=false, user=ENV["USER"])
+  def run_command(server, command="id", background=false, root=false, user=ENV["USER"])
     log(:VERBOSE,"#{server}::Connecting")
     sudo = root ? "sudo " : ""
+    if background
+      nohup = "nohup "
+      nohup_end = " &"
+    else
+      nohup = nohup_end = ""
+    end
     Net::SSH.start(server, user) do |session|
-      exec_command = "#{sudo}sh -c \"#{command}\""
+      exec_command = "#{nohup}#{sudo}sh -c \"#{command}\"#{nohup_end}"
       log(:VERBOSE, "#{server}::Executing #{exec_command}")
       session.exec!(exec_command) do |channel, stream, data|
         log(:OUT, "#{server}::#{data}") unless @conf["silent"]
+        if background
+          # Give time to attach tty to background
+          sleep(3)
+          return
+        end
       end
     end
   end
@@ -127,7 +139,7 @@ private
     if File.exists?("#{server}.ignore")
       log(:INFO, "#{server}::Ignoring this server")
     else
-      run_command server, command, job[:ROOT], job[:USER]
+      run_command server, command, job[:BACKGROUND], job[:ROOT], job[:USER]
     end
     job[:STATUS] = :OK
   end
@@ -171,6 +183,7 @@ begin
     [ "--timestamp", "-t", GetoptLong::OPTIONAL_ARGUMENT ],
     [ "--user", "-u", GetoptLong::OPTIONAL_ARGUMENT ],
     [ "--verbose", "-v", GetoptLong::OPTIONAL_ARGUMENT ],
+    [ "--background", "-b", GetoptLong::OPTIONAL_ARGUMENT ],
   )
 
   Rubyfy.new(opts).run
