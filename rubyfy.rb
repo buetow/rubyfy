@@ -45,7 +45,7 @@ class Rubyfy
 
     # Dealing where to write the output to
     @conf["outdir"] = "./out" unless @conf["outdir"]
-    @conf["name"] = "#{ENV["USER"]}.#{Time.now.to_i}" unless @conf["name"]
+    @conf["name"] = "#{ENV["USER"]}" unless @conf["name"]
     @outfile = "#{@conf["outdir"]}/#{@conf["name"]}"
     FileUtils.mkdir_p(@conf["outdir"]) unless File.directory?(@conf["outdir"])
 
