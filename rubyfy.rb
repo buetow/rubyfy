@@ -6,6 +6,7 @@ require "fileutils"
 require "getoptlong"
 require "json"
 require "net/http"
+require "net/scp"
 require "net/ssh"
 require "pp"
 require "thread"
@@ -30,7 +31,7 @@ class Rubyfy
         conf_json = JSON.parse(File.read(conf_path))
         log(:VERBOSE, conf_json)
         conf_json.each do |opt, arg|
-          @conf[opt] = arg unless @conf[arg]
+          @conf[opt] = arg unless @conf[opt]
         end
         break
       end
@@ -67,6 +68,7 @@ class Rubyfy
         :COMMAND => @conf["command"],
         :PRECONDITION => @conf["precondition"],
         :ROOT => @conf["root"],
+        :SCRIPT => @conf["script"],
         :SERVER => server,
         :STATUS => :NONE,
         :USER => @conf["user"],
@@ -84,9 +86,10 @@ class Rubyfy
             run_job(job)
           end
         rescue ThreadError => e
-        rescue => e
-          log(:ERROR, "#{job[:SERVER]}::#{e.message}")
-          log(:ERROR, "#{job[:SERVER]}::#{e.inspect}")
+        #rescue => e
+        #  log(:ERROR, "#{job[:SERVER]}::#{e.message}")
+        #  log(:ERROR, "#{job[:SERVER]}::#{e.inspect}")
+        #  log(:ERROR, "#{job[:SERVER]}::#{e}")
         end
       end
     end
@@ -105,7 +108,7 @@ class Rubyfy
 
 private
 
-  def run_command(server, command="id", background=false, root=false, user=ENV["USER"])
+  def run_command(server, user=ENV["USER"], command="id", background=false, root=false, script=nil)
     log(:VERBOSE,"#{server}::Connecting")
     sudo = root ? "sudo " : ""
     if background
@@ -114,10 +117,26 @@ private
     else
       nohup = nohup_end = ""
     end
-    Net::SSH.start(server, user) do |session|
-      exec_command = "#{nohup}#{sudo}sh -c \"#{command}\"#{nohup_end}"
+    Net::SSH.start(server, user) do |ssh|
+      exec_command = nil
+      if script
+        log(:VERBOSE, "#{server}::Using script #{script} (command will be overwritten)")
+        basename = File.basename(script)
+        remote_dir = "./scripts"
+        log(:DEBUG, "#{server}::Creating #{remote_dir}")
+        ssh.exec!("test -d #{remote_dir} || mkdir #{remote_dir}")
+        log(:DEBUG, "Uploading file #{script} => #{remote_dir}/#{basename}")
+        ssh.scp.upload!(script, "#{remote_dir}/#{basename}")
+        log(:DEBUG, "Set permissions #{remote_dir}/#{basename} => 0750")
+        ssh.exec!("chmod 755 #{remote_dir}/#{basename}")
+        exec_command = "#{nohup}#{sudo}sh -c \"#{remote_dir}/#{basename}\"#{nohup_end}"
+
+      else
+        exec_command = "#{nohup}#{sudo}sh -c \"#{command}\"#{nohup_end}"
+      end
+
       log(:VERBOSE, "#{server}::Executing #{exec_command}")
-      session.exec!(exec_command) do |channel, stream, data|
+      ssh.exec!(exec_command) do |channel, stream, data|
         log(:OUT, "#{server}::#{data}") unless @conf["silent"]
         if background
           # Give time to attach tty to background
@@ -125,6 +144,12 @@ private
           return
         end
       end
+    end
+  end
+
+  def upload_script(server, user, script, remote_dir)
+    Net::SSH.start(server, user) do |ssh|
+      #sftp.mkdir!(remote_dir)
     end
   end
 
@@ -143,7 +168,7 @@ private
     if File.exists?("#{server}.ignore")
       log(:INFO, "#{server}::Ignoring this server")
     else
-      run_command server, command, job[:BACKGROUND], job[:ROOT], job[:USER]
+      run_command server, job[:USER], command, job[:BACKGROUND], job[:ROOT], job[:SCRIPT]
     end
     job[:STATUS] = :OK
   end
@@ -176,6 +201,7 @@ end
 
 begin
   opts = GetoptLong.new(
+    [ "--background", "-b", GetoptLong::OPTIONAL_ARGUMENT ],
     [ "--command", "-c", GetoptLong::REQUIRED_ARGUMENT ],
     [ "--debug", "-d", GetoptLong::OPTIONAL_ARGUMENT ],
     [ "--name", "-n", GetoptLong::OPTIONAL_ARGUMENT ],
@@ -183,11 +209,11 @@ begin
     [ "--parallel", "-p", GetoptLong::OPTIONAL_ARGUMENT ],
     [ "--precondition", "-P", GetoptLong::OPTIONAL_ARGUMENT ],
     [ "--root", "-r", GetoptLong::OPTIONAL_ARGUMENT ],
-    [ "--silent", "-s", GetoptLong::OPTIONAL_ARGUMENT ],
+    [ "--script", "-s", GetoptLong::OPTIONAL_ARGUMENT ],
+    [ "--silent", "-S", GetoptLong::OPTIONAL_ARGUMENT ],
     [ "--timestamp", "-t", GetoptLong::OPTIONAL_ARGUMENT ],
     [ "--user", "-u", GetoptLong::OPTIONAL_ARGUMENT ],
     [ "--verbose", "-v", GetoptLong::OPTIONAL_ARGUMENT ],
-    [ "--background", "-b", GetoptLong::OPTIONAL_ARGUMENT ],
   )
 
   Rubyfy.new(opts).run
