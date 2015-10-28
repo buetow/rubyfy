@@ -16,6 +16,7 @@ class Rubyfy
     @conf = Hash.new
     @log_mutex = Mutex.new
     @outfile = nil
+    @outfile_mode = "w"
 
     opts.each do |opt, arg|
       opt.sub!(/^-+/, '')
@@ -191,8 +192,9 @@ private
     @log_mutex.synchronize do
       puts message
       if @outfile and severity != :STDOUTONLY
-        open(@outfile, "a") do |f|
+        open(@outfile, @outfile_mode) do |f|
           f.puts message
+          @outfile_mode = "a"
         end
       end
     end
