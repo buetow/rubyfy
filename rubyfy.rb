@@ -87,10 +87,10 @@ class Rubyfy
             run_job(job)
           end
         rescue ThreadError => e
-        #rescue => e
-        #  log(:ERROR, "#{job[:SERVER]}::#{e.message}")
-        #  log(:ERROR, "#{job[:SERVER]}::#{e.inspect}")
-        #  log(:ERROR, "#{job[:SERVER]}::#{e}")
+        rescue => e
+          log(:ERROR, "#{job[:SERVER]}::#{e.message}")
+          log(:ERROR, "#{job[:SERVER]}::#{e.inspect}")
+          log(:ERROR, "#{job[:SERVER]}::#{e}")
         end
       end
     end
@@ -109,8 +109,9 @@ class Rubyfy
 
 private
 
-  def run_command(server, user=ENV["USER"], command="id", background=false, root=false, script=nil)
+  def run_command(server, user=ENV["USER"], pcond=nil, command="id", background=false, root=false, script=nil)
     log(:VERBOSE,"#{server}::Connecting")
+    command = nil
     sudo = root ? "sudo " : ""
     if background
       nohup = "nohup "
@@ -130,11 +131,16 @@ private
         ssh.scp.upload!(script, "#{remote_dir}/#{basename}")
         log(:DEBUG, "Set permissions #{remote_dir}/#{basename} => 0750")
         ssh.exec!("chmod 755 #{remote_dir}/#{basename}")
-        exec_command = "#{nohup}#{sudo}sh -c \"#{remote_dir}/#{basename}\"#{nohup_end}"
-
-      else
-        exec_command = "#{nohup}#{sudo}sh -c \"#{command}\"#{nohup_end}"
+        command = "#{remote_dir}/#{basename}"
       end
+
+      # Exit the job if pcond file exists on the server
+      if pcond
+        add = "test -f #{pcond} && echo Precondition #{pcond} exists && exit 1"
+        command = "#{add}; #{command}"
+      end
+
+      exec_command = "#{nohup}#{sudo}sh -c \"#{command}\"#{nohup_end}"
 
       log(:VERBOSE, "#{server}::Executing #{exec_command}")
       ssh.exec!(exec_command) do |channel, stream, data|
@@ -159,17 +165,11 @@ private
     command = job[:COMMAND]
     pcond = job[:PRECONDITION]
 
-    # Exit the job if pcond file exists on the server
-    if pcond
-      add = "test -f #{pcond} && echo Precondition #{pcond} exists && exit 1"
-      command = "#{add}; #{command}"
-    end
-
     log(:VERBOSE, "#{server}::Running job #{job}")
     if File.exists?("#{server}.ignore")
       log(:INFO, "#{server}::Ignoring this server")
     else
-      run_command server, job[:USER], command, job[:BACKGROUND], job[:ROOT], job[:SCRIPT]
+      run_command server, job[:USER], pcond, command, job[:BACKGROUND], job[:ROOT], job[:SCRIPT]
     end
     job[:STATUS] = :OK
   end
