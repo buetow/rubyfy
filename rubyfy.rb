@@ -111,7 +111,6 @@ private
 
   def run_command(server, user=ENV["USER"], pcond=nil, command="id", background=false, root=false, script=nil)
     log(:VERBOSE,"#{server}::Connecting")
-    command = nil
     sudo = root ? "sudo " : ""
     if background
       nohup = "nohup "
@@ -120,7 +119,6 @@ private
       nohup = nohup_end = ""
     end
     Net::SSH.start(server, user) do |ssh|
-      exec_command = nil
       if script
         log(:VERBOSE, "#{server}::Using script #{script} (command will be overwritten)")
         basename = File.basename(script)
