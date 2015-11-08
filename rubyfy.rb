@@ -70,6 +70,7 @@ class Rubyfy
         :PRECONDITION => @conf["precondition"],
         :ROOT => @conf["root"],
         :SCRIPT => @conf["script"],
+        :DOWNLOAD => @conf["download"],
         :SERVER => server,
         :STATUS => :NONE,
         :USER => @conf["user"],
@@ -109,7 +110,7 @@ class Rubyfy
 
 private
 
-  def run_command(server, user=ENV["USER"], pcond=nil, command="id", background=false, root=false, script=nil)
+  def run_command(server, user=ENV["USER"], pcond=nil, command="id", background=false, root=false, script=nil, download=nil)
     log(:VERBOSE,"#{server}::Connecting")
     sudo = root ? "sudo " : ""
     if background
@@ -149,6 +150,11 @@ private
           return
         end
       end
+
+      if download
+        log(:VERBOSE, "#{server}::Downloading #{download} to file #{server}")
+        ssh.scp.download!(download, server)
+      end
     end
   end
 
@@ -167,7 +173,7 @@ private
     if File.exists?("#{server}.ignore")
       log(:INFO, "#{server}::Ignoring this server")
     else
-      run_command server, job[:USER], pcond, command, job[:BACKGROUND], job[:ROOT], job[:SCRIPT]
+      run_command server, job[:USER], pcond, command, job[:BACKGROUND], job[:ROOT], job[:SCRIPT], job[:DOWNLOAD]
     end
     job[:STATUS] = :OK
   end
@@ -210,6 +216,7 @@ begin
     [ "--precondition", "-P", GetoptLong::OPTIONAL_ARGUMENT ],
     [ "--root", "-r", GetoptLong::OPTIONAL_ARGUMENT ],
     [ "--script", "-s", GetoptLong::OPTIONAL_ARGUMENT ],
+    [ "--download", "-D", GetoptLong::OPTIONAL_ARGUMENT ],
     [ "--silent", "-S", GetoptLong::OPTIONAL_ARGUMENT ],
     [ "--timestamp", "-t", GetoptLong::OPTIONAL_ARGUMENT ],
     [ "--user", "-u", GetoptLong::OPTIONAL_ARGUMENT ],
