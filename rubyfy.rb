@@ -89,9 +89,9 @@ class Rubyfy
           end
         rescue ThreadError => e
         rescue => e
-          log(:ERROR, "#{job[:SERVER]}::#{e.message}")
-          log(:ERROR, "#{job[:SERVER]}::#{e.inspect}")
-          log(:ERROR, "#{job[:SERVER]}::#{e}")
+          log(:ERROR, "#{job[:SERVER]}::#{__callee__}::#{e.message}")
+          log(:ERROR, "#{job[:SERVER]}::#{__callee__}::#{e.inspect}")
+          log(:ERROR, "#{job[:SERVER]}::#{__callee__}::#{e}")
         end
       end
     end
@@ -158,12 +158,6 @@ private
     end
   end
 
-  def upload_script(server, user, script, remote_dir)
-    Net::SSH.start(server, user) do |ssh|
-      #sftp.mkdir!(remote_dir)
-    end
-  end
-
   def run_job(job)
     server = job[:SERVER]
     command = job[:COMMAND]
@@ -176,6 +170,11 @@ private
       run_command server, job[:USER], pcond, command, job[:BACKGROUND], job[:ROOT], job[:SCRIPT], job[:DOWNLOAD]
     end
     job[:STATUS] = :OK
+
+  rescue ::Exception => e
+    log(:ERROR, "#{server}::#{__callee__}::#{e.message}")
+    log(:ERROR, "#{server}::#{__callee__}::#{e.inspect}")
+    log(:ERROR, "#{server}::#{__callee__}::#{e}")
   end
 
   def http_get(uri_str, content_type="application/json")
