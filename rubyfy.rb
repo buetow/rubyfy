@@ -70,6 +70,7 @@ class Rubyfy
         :PRECONDITION => @conf["precondition"],
         :ROOT => @conf["root"],
         :SCRIPT => @conf["script"],
+        :SCRIPTARGUMENTS => @conf["scriptarguments"],
         :DOWNLOAD => @conf["download"],
         :SERVER => server,
         :STATUS => :NONE,
@@ -110,7 +111,7 @@ class Rubyfy
 
 private
 
-  def run_command(server, user=ENV["USER"], pcond=nil, command="id", background=false, root=false, script=nil, download=nil)
+  def run_command(server, user=ENV["USER"], pcond=nil, command="id", background=false, root=false, script=nil, scriptarguments=nil, download=nil)
     log(:VERBOSE,"#{server}::Connecting")
     sudo = root ? "sudo " : ""
     if background
@@ -131,6 +132,7 @@ private
         log(:DEBUG, "Set permissions #{remote_dir}/#{basename} => 0750")
         ssh.exec!("chmod 755 #{remote_dir}/#{basename}")
         command = "#{remote_dir}/#{basename}"
+        command += " #{scriptarguments}" unless scriptarguments.nil?
       end
 
       # Exit the job if pcond file exists on the server
@@ -167,7 +169,7 @@ private
     if File.exists?("#{server}.ignore")
       log(:INFO, "#{server}::Ignoring this server")
     else
-      run_command server, job[:USER], pcond, command, job[:BACKGROUND], job[:ROOT], job[:SCRIPT], job[:DOWNLOAD]
+      run_command server, job[:USER], pcond, command, job[:BACKGROUND], job[:ROOT], job[:SCRIPT], job[:SCRIPTARGUMENTS], job[:DOWNLOAD]
     end
     job[:STATUS] = :OK
 
@@ -215,6 +217,7 @@ begin
     [ "--precondition", "-P", GetoptLong::OPTIONAL_ARGUMENT ],
     [ "--root", "-r", GetoptLong::OPTIONAL_ARGUMENT ],
     [ "--script", "-s", GetoptLong::OPTIONAL_ARGUMENT ],
+    [ "--scriptarguments", "-a", GetoptLong::OPTIONAL_ARGUMENT ],
     [ "--download", "-D", GetoptLong::OPTIONAL_ARGUMENT ],
     [ "--silent", "-S", GetoptLong::OPTIONAL_ARGUMENT ],
     [ "--timestamp", "-t", GetoptLong::OPTIONAL_ARGUMENT ],
