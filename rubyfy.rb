@@ -11,19 +11,15 @@ require "net/ssh"
 require "pp"
 require "thread"
 
+$opts = Hash.new
+
 class Rubyfy
-  def initialize(opts)
-    @conf = Hash.new
+  def initialize
     @log_mutex = Mutex.new
     @outfile = nil
     @outfile_mode = "w"
 
-    opts.each do |opt, arg|
-      opt.sub!(/^-+/, '')
-      @conf[opt] = arg
-    end
-
-    @conf["verbose"] = true if @conf["debug"]
+    $opts["verbose"] = true if $opts["debug"]
 
     # Read first config found
     ["#{ENV["HOME"]}/.rubyfy.json", "rubyfy.json"].each do |conf_path|
@@ -32,26 +28,26 @@ class Rubyfy
         conf_json = JSON.parse(File.read(conf_path))
         log(:VERBOSE, conf_json)
         conf_json.each do |opt, arg|
-          @conf[opt] = arg unless @conf[opt]
+          $opts[opt] = arg unless $opts[opt]
         end
         break
       end
     end
 
     # Needed a 2nd time (as we read the config file)
-    @conf["verbose"] = true if @conf["debug"]
+    $opts["verbose"] = true if $opts["debug"]
 
     # Set defaults of values if not set
-    @conf["parallel"] = 1 unless @conf["parallel"]
-    @conf["user"] = ENV["USER"] unless @conf["user"]
+    $opts["parallel"] = 1 unless $opts["parallel"]
+    $opts["user"] = ENV["USER"] unless $opts["user"]
 
     # Dealing where to write the output to
-    @conf["outdir"] = "./out" unless @conf["outdir"]
-    @conf["name"] = "#{ENV["USER"]}" unless @conf["name"]
-    @outfile = "#{@conf["outdir"]}/#{@conf["name"]}"
-    FileUtils.mkdir_p(@conf["outdir"]) unless File.directory?(@conf["outdir"])
+    $opts["outdir"] = "./out" unless $opts["outdir"]
+    $opts["name"] = "#{ENV["USER"]}" unless $opts["name"]
+    @outfile = "#{$opts["outdir"]}/#{$opts["name"]}"
+    FileUtils.mkdir_p($opts["outdir"]) unless File.directory?($opts["outdir"])
 
-    log(:DEBUG, @conf)
+    log(:DEBUG, $opts)
   end
 
   def run
@@ -65,22 +61,22 @@ class Rubyfy
     work_q = Queue.new
     servers.each do |server|
       job = {
-        :BACKGROUND => @conf["background"],
-        :COMMAND => @conf["command"],
-        :PRECONDITION => @conf["precondition"],
-        :ROOT => @conf["root"],
-        :SCRIPT => @conf["script"],
-        :SCRIPTARGUMENTS => @conf["scriptarguments"],
-        :DOWNLOAD => @conf["download"],
+        :BACKGROUND => $opts["background"],
+        :COMMAND => $opts["command"],
+        :PRECONDITION => $opts["precondition"],
+        :ROOT => $opts["root"],
+        :SCRIPT => $opts["script"],
+        :SCRIPTARGUMENTS => $opts["scriptarguments"],
+        :DOWNLOAD => $opts["download"],
         :SERVER => server,
         :STATUS => :NONE,
-        :USER => @conf["user"],
+        :USER => $opts["user"],
       }
       jobs << job
       work_q.push(job)
     end
 
-    parallel = @conf["parallel"].to_i
+    parallel = $opts["parallel"].to_i
 
     threads = (1..parallel).map do
       Thread.new do
@@ -145,7 +141,7 @@ private
 
       log(:VERBOSE, "#{server}::Executing #{exec_command}")
       ssh.exec!(exec_command) do |channel, stream, data|
-        log(:OUT, "#{server}::#{data}") unless @conf["silent"]
+        log(:OUT, "#{server}::#{data}") unless $opts["silent"]
         if background
           # Give time to attach tty to background
           sleep(3)
@@ -188,10 +184,10 @@ private
   end
 
   def log(severity, message)
-    return if severity == :VERBOSE and not @conf["verbose"]
-    return if severity == :DEBUG and not @conf["debug"]
+    return if severity == :VERBOSE and not $opts["verbose"]
+    return if severity == :DEBUG and not $opts["debug"]
 
-    timestamp = @conf["timestamp"] ? "#{Time.now}::" : ""
+    timestamp = $opts["timestamp"] ? "#{Time.now}::" : ""
     message = "#{timestamp}#{severity}::#{message}"
 
     @log_mutex.synchronize do
@@ -223,7 +219,42 @@ begin
     [ "--timestamp", "-t", GetoptLong::OPTIONAL_ARGUMENT ],
     [ "--user", "-u", GetoptLong::OPTIONAL_ARGUMENT ],
     [ "--verbose", "-v", GetoptLong::OPTIONAL_ARGUMENT ],
+    [ "--help", "-h", GetoptLong::OPTIONAL_ARGUMENT ],
   )
 
-  Rubyfy.new(opts).run
+  opts.each { |opt, arg| opt.sub!(/^-+/, ''); $opts[opt] = arg }
+
+  if $opts["help"]
+    puts <<-END
+    -a, --scriptarguments <args..>  Arguments for -s
+    -c, --command <command>         Command to run remotely
+    -d, --debug                     Enable debug output (implies verbose)
+    -D, --download <path>           Download file from remote path after execution
+    -h, --help                      Print this help
+    -n, --name <name>               Job name (default: $USER)
+    -o, --outdir <dir>              Directory to store output files (default: ~/out)
+    -p, --parallel <num>            Amount of parallel SSH connections (default: 5)
+    -P, --precondition <path>       Only run command if file in path doesn't exist remotely
+    -r, --root                      Run specified command as user root (via sudo)
+    -s, --script <script.sh>        Upload the script to the remote server and run it
+    -S, --silent                    Silent mode
+    -t, --timestamp                 Include timestamp in log output
+    -u, --user <user>               Login to remote server as a specific user (default: $USER)
+    -v, --verbose                   Enable verbose output
+
+    Examples:
+      Run command "hostname" on server foo.example.com
+          echo foo.example.com | ./srun -c hostname
+
+      Run command "id" on the specified servers, store output in file "jobname"
+          echo {foo,bar,baz}.example.com | ./srun -p 2 -r -c id -n jobname
+
+      Upload script "test.sh" to the server, run it, and download file /tmp/test
+      afterwards to file foo.example.com.test.
+          echo foo.example.com | ./srun -s test.sh -D /tmp/test
+    END
+    exit(0)
+  end
+
+  Rubyfy.new.run
 end
