@@ -1,6 +1,6 @@
 #!/usr/bin/env ruby
 
-# (C) 2015 by Paul Buetow 
+# (C) 2015, 2016 by Paul Buetow 
 
 require "fileutils"
 require "getoptlong"
@@ -66,6 +66,7 @@ class Rubyfy
         :PRECONDITION => $opts["precondition"],
         :ROOT => $opts["root"],
         :SCRIPT => $opts["script"],
+        :UPLOAD => $opts["upload"],
         :SCRIPTARGUMENTS => $opts["scriptarguments"],
         :DOWNLOAD => $opts["download"],
         :SERVER => server,
@@ -86,19 +87,19 @@ class Rubyfy
           end
         rescue ThreadError => e
         rescue => e
-          log(:ERROR, "#{job[:SERVER]}::#{__callee__}::#{e.message}")
-          log(:ERROR, "#{job[:SERVER]}::#{__callee__}::#{e.inspect}")
-          log(:ERROR, "#{job[:SERVER]}::#{__callee__}::#{e}")
+          log(:ERROR, "#{job[:SERVER]}|#{__callee__}|#{e.message}")
+          log(:ERROR, "#{job[:SERVER]}|#{__callee__}|#{e.inspect}")
+          log(:ERROR, "#{job[:SERVER]}|#{__callee__}|#{e}")
         end
       end
     end
 
     threads.map(&:join)
-    log(:INFO, "-::Done processing all servers")
+    log(:INFO, "-|Done processing all servers")
 
     jobs.each do |job|
       if job[:STATUS] != :OK
-        log(:WARN,"#{job[:SERVER]}::No job result")
+        log(:WARN,"#{job[:SERVER]}|No job result")
       end
     end
 
@@ -107,8 +108,24 @@ class Rubyfy
 
 private
 
+  def upload_script(ssh, server, script, scriptarguments = nil)
+    log(:VERBOSE, "#{server}|Uploading script #{script}")
+    basename = File.basename(script)
+    remote_dir = "./scripts"
+    log(:DEBUG, "#{server}|Creating #{remote_dir}")
+    ssh.exec!("test -d #{remote_dir} || mkdir #{remote_dir}")
+    log(:DEBUG, "Uploading file #{script} => #{remote_dir}/#{basename}")
+    ssh.scp.upload!(script, "#{remote_dir}/#{basename}")
+    log(:DEBUG, "Set permissions #{remote_dir}/#{basename} => 0750")
+    ssh.exec!("chmod 755 #{remote_dir}/#{basename}")
+
+    command = "#{remote_dir}/#{basename}"
+    command += " #{scriptarguments}" unless scriptarguments.nil?
+    command
+  end
+
   def run_command(server, user=ENV["USER"], pcond=nil, command="id", background=false, root=false, script=nil, scriptarguments=nil, download=nil)
-    log(:VERBOSE,"#{server}::Connecting")
+    log(:VERBOSE,"#{server}|Connecting")
     sudo = root ? "sudo " : ""
     if background
       nohup = "nohup "
@@ -117,19 +134,7 @@ private
       nohup = nohup_end = ""
     end
     Net::SSH.start(server, user) do |ssh|
-      if script
-        log(:VERBOSE, "#{server}::Using script #{script} (command will be overwritten)")
-        basename = File.basename(script)
-        remote_dir = "./scripts"
-        log(:DEBUG, "#{server}::Creating #{remote_dir}")
-        ssh.exec!("test -d #{remote_dir} || mkdir #{remote_dir}")
-        log(:DEBUG, "Uploading file #{script} => #{remote_dir}/#{basename}")
-        ssh.scp.upload!(script, "#{remote_dir}/#{basename}")
-        log(:DEBUG, "Set permissions #{remote_dir}/#{basename} => 0750")
-        ssh.exec!("chmod 755 #{remote_dir}/#{basename}")
-        command = "#{remote_dir}/#{basename}"
-        command += " #{scriptarguments}" unless scriptarguments.nil?
-      end
+      command = upload_script(ssh, server, script) unless script.nil?
 
       # Exit the job if pcond file exists on the server
       if pcond
@@ -139,9 +144,9 @@ private
 
       exec_command = "#{nohup}#{sudo}sh -c \"#{command}\"#{nohup_end}"
 
-      log(:VERBOSE, "#{server}::Executing #{exec_command}")
+      log(:VERBOSE, "#{server}|Executing #{exec_command}")
       ssh.exec!(exec_command) do |channel, stream, data|
-        log(:OUT, "#{server}::#{data}") unless $opts["silent"]
+        log(:OUT, "#{server}|#{data}") unless $opts["silent"]
         if background
           # Give time to attach tty to background
           sleep(3)
@@ -150,7 +155,7 @@ private
       end
 
       if download
-        log(:VERBOSE, "#{server}::Downloading #{download} to file #{server}")
+        log(:VERBOSE, "#{server}|Downloading #{download} to file #{server}")
         ssh.scp.download!(download, server)
       end
     end
@@ -161,18 +166,20 @@ private
     command = job[:COMMAND]
     pcond = job[:PRECONDITION]
 
-    log(:VERBOSE, "#{server}::Running job #{job}")
+    log(:VERBOSE, "#{server}|Running job #{job}")
     if File.exists?("#{server}.ignore")
-      log(:INFO, "#{server}::Ignoring this server")
+      log(:INFO, "#{server}|Ignoring this server")
+    elsif !job[:UPLOAD].nil?
+      Net::SSH.start(server, job[:USER]) { |ssh| upload_script(ssh, server, job[:UPLOAD]) }
     else
       run_command server, job[:USER], pcond, command, job[:BACKGROUND], job[:ROOT], job[:SCRIPT], job[:SCRIPTARGUMENTS], job[:DOWNLOAD]
     end
     job[:STATUS] = :OK
 
   rescue ::Exception => e
-    log(:ERROR, "#{server}::#{__callee__}::#{e.message}")
-    log(:ERROR, "#{server}::#{__callee__}::#{e.inspect}")
-    log(:ERROR, "#{server}::#{__callee__}::#{e}")
+    log(:ERROR, "#{server}|#{__callee__}|#{e.message}")
+    log(:ERROR, "#{server}|#{__callee__}|#{e.inspect}")
+    log(:ERROR, "#{server}|#{__callee__}|#{e}")
   end
 
   def http_get(uri_str, content_type="application/json")
@@ -187,8 +194,8 @@ private
     return if severity == :VERBOSE and not $opts["verbose"]
     return if severity == :DEBUG and not $opts["debug"]
 
-    timestamp = $opts["timestamp"] ? "#{Time.now}::" : ""
-    message = "#{timestamp}#{severity}::#{message}"
+    timestamp = $opts["timestamp"] ? "#{Time.now}|" : ""
+    message = "#{timestamp}#{severity}|#{message}"
 
     @log_mutex.synchronize do
       puts message
@@ -218,6 +225,7 @@ begin
     [ "--silent", "-S", GetoptLong::OPTIONAL_ARGUMENT ],
     [ "--timestamp", "-t", GetoptLong::OPTIONAL_ARGUMENT ],
     [ "--user", "-u", GetoptLong::OPTIONAL_ARGUMENT ],
+    [ "--upload", "-U", GetoptLong::OPTIONAL_ARGUMENT ],
     [ "--verbose", "-v", GetoptLong::OPTIONAL_ARGUMENT ],
     [ "--help", "-h", GetoptLong::OPTIONAL_ARGUMENT ],
   )
@@ -240,6 +248,7 @@ begin
     -S, --silent                    Silent mode
     -t, --timestamp                 Include timestamp in log output
     -u, --user <user>               Login to remote server as a specific user (default: $USER)
+    -U, --upload <script.sh>        Only upload script, don't execute it
     -v, --verbose                   Enable verbose output
 
     Examples:
